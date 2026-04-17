@@ -102,15 +102,16 @@ static void read_save_file(void)
       save_size = filestream_tell(save_file);
       filestream_seek(save_file, 0, RETRO_VFS_SEEK_POSITION_START);
 
-      if (save_size != (int64_t)game_data_size())
+      if (save_size > (int64_t)game_data_size())
       {
          log_2048(RETRO_LOG_ERROR, "Failed to load save file: incorrect size.\n");
          filestream_close(save_file);
          return;
       }
 
-      /* Read save file */
-      filestream_read(save_file, game_data(), game_data_size());
+      /* Read save file. save_size may be smaller than the current struct when
+       * new fields were appended; the remainder stays zeroed from init_game(). */
+      filestream_read(save_file, game_data(), (size_t)save_size);
       filestream_close(save_file);
 
       log_2048(RETRO_LOG_INFO, "Loaded save file: %s\n", save_path);

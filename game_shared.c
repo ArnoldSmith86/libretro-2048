@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <assert.h>
+#include <time.h>
 #include "game_shared.h"
 
 static game_t game;
@@ -63,8 +64,11 @@ void *game_save_data(void)
 
    delta_score_time = 1;
 
-   /* show title screen when the game gets loaded again. */
-   if (game.state != STATE_PLAYING && game.state != STATE_PAUSED)
+   /* show title screen when the game gets loaded again, but preserve an
+    * active game (PLAYING, PAUSED) and a pending name entry (NAME_ENTRY). */
+   if (game.state != STATE_PLAYING  &&
+       game.state != STATE_PAUSED   &&
+       game.state != STATE_NAME_ENTRY)
    {
       game.score = 0;
       game.state = STATE_TITLE;
@@ -88,6 +92,10 @@ void render_game(void)
       render_win_or_game_over();
    else if (game.state == STATE_PAUSED)
       render_paused();
+   else if (game.state == STATE_NAME_ENTRY)
+      render_name_entry();
+   else if (game.state == STATE_HIGHSCORES)
+      render_highscores();
 }
 
 static void add_tile(void)
@@ -116,7 +124,7 @@ static void add_tile(void)
       empty[j]->value = ((float)rand() / RAND_MAX) < 0.9 ? 1 : 2;
    }
    else
-      change_state(STATE_GAME_OVER);
+      change_state(STATE_NAME_ENTRY);
 }
 
 void init_game(void)
@@ -148,6 +156,7 @@ void start_game(void)
    }
 
    game.won_before = false;
+   game.suspended  = false;
 
    /* reset +score animation */
    delta_score      = 0;
@@ -331,7 +340,7 @@ void game_update(float delta, key_state_t *new_ks)
          add_tile();
 
       if (!matches_available() && !cells_available())
-         change_state(STATE_GAME_OVER);
+         change_state(STATE_NAME_ENTRY);
    }
 }
 
@@ -364,6 +373,121 @@ cell_t * game_get_grid(void)
    return game.grid;
 }
 
+highscore_entry_t *game_get_highscores(void)
+{
+   return game.highscores;
+}
+
+int game_get_hs_count(void)
+{
+   return game.hs_count;
+}
+
+int game_get_hs_page(void)
+{
+   return game.hs_page;
+}
+
+const char *game_get_name_entry(void)
+{
+   return game.name_entry;
+}
+
+int game_get_name_cursor(void)
+{
+   return game.name_cursor;
+}
+
+bool game_get_suspended(void)
+{
+   return game.suspended;
+}
+
+int game_get_hs_time_filter(void)
+{
+   return game.hs_time_filter;
+}
+
+int game_get_hs_row_focus(void)
+{
+   return game.hs_row_focus;
+}
+
+static void add_highscore(const char *name, int score)
+{
+   highscore_entry_t *entry = NULL;
+   time_t t;
+   struct tm *tm_info;
+   int i, min_idx;
+
+   if (game.hs_count < MAX_HIGHSCORES)
+   {
+      entry = &game.highscores[game.hs_count++];
+   }
+   else
+   {
+      min_idx = 0;
+      for (i = 1; i < MAX_HIGHSCORES; i++)
+         if (game.highscores[i].score < game.highscores[min_idx].score)
+            min_idx = i;
+      if (score > game.highscores[min_idx].score)
+         entry = &game.highscores[min_idx];
+   }
+
+   if (!entry)
+      return;
+
+   strncpy(entry->name, name, 3);
+   entry->name[3] = '\0';
+   entry->score   = score;
+   strncpy(game.last_name, name, 4);
+
+   {
+      int gi, max_tile = 0;
+      for (gi = 0; gi < GRID_SIZE; gi++)
+         if (game.grid[gi].value > max_tile)
+            max_tile = game.grid[gi].value;
+      entry->best_tile = (uint8_t)max_tile;
+   }
+
+   t       = time(NULL);
+   tm_info = localtime(&t);
+   if (tm_info)
+   {
+      entry->year  = (int16_t)(tm_info->tm_year + 1900);
+      entry->month = (uint8_t)(tm_info->tm_mon + 1);
+      entry->day   = (uint8_t)tm_info->tm_mday;
+   }
+   else
+   {
+      entry->year  = 0;
+      entry->month = 0;
+      entry->day   = 0;
+   }
+}
+
+static int count_hs_players(void)
+{
+   char seen[MAX_HIGHSCORES][4];
+   int count = 0;
+   int i, j;
+
+   for (i = 0; i < game.hs_count; i++)
+   {
+      bool found = false;
+      for (j = 0; j < count; j++)
+         if (strncmp(seen[j], game.highscores[i].name, 3) == 0)
+         { found = true; break; }
+      if (!found)
+      {
+         strncpy(seen[count], game.highscores[i].name, 3);
+         seen[count][3] = '\0';
+         count++;
+      }
+   }
+   return count;
+}
+
 game_state_t game_get_state(void)
 {
    return game.state;
@@ -379,22 +503,81 @@ void change_state(game_state_t state)
    switch (game.state)
    {
       case STATE_TITLE:
+         assert(state == STATE_PLAYING || state == STATE_HIGHSCORES);
+         if (state == STATE_HIGHSCORES)
+         {
+            game.hs_page        = 0;
+            game.hs_row_focus   = 0;
+            game.hs_time_filter = 0;
+         }
+         if (state == STATE_PLAYING)
+         {
+            game.state = state;
+            if (game.suspended)
+               game.suspended = false; /* resume in-place, grid/score untouched */
+            else
+               start_game();
+            return;
+         }
+         break;
+
       case STATE_GAME_OVER:
-         assert(state == STATE_PLAYING);
-         game.state = state;
-         start_game();
+         assert(state == STATE_PLAYING || state == STATE_HIGHSCORES);
+         if (state == STATE_HIGHSCORES)
+         {
+            game.hs_page        = 0;
+            game.hs_row_focus   = 0;
+            game.hs_time_filter = 0;
+         }
+         if (state == STATE_PLAYING)
+         {
+            game.state = state;
+            start_game();
+            return;
+         }
          break;
+
       case STATE_PLAYING:
-         assert(state == STATE_GAME_OVER || state == STATE_WON || state == STATE_PAUSED);
-         if (state != STATE_PAUSED)
+         assert(state == STATE_NAME_ENTRY || state == STATE_WON || state == STATE_PAUSED);
+         if (state == STATE_WON)
             end_game();
+         if (state == STATE_NAME_ENTRY)
+         {
+            if (game.last_name[0] >= 'A' && game.last_name[0] <= 'Z')
+               strncpy(game.name_entry, game.last_name, 4);
+            else
+            {
+               game.name_entry[0] = game.name_entry[1] = game.name_entry[2] = 'A';
+               game.name_entry[3] = '\0';
+            }
+            game.name_cursor = 0;
+         }
          break;
+
+      case STATE_NAME_ENTRY:
+         assert(state == STATE_GAME_OVER);
+         end_game();
+         break;
+
       case STATE_WON:
          end_game();
+         if (state == STATE_TITLE)
+            game.suspended = false; /* won game → fresh start from title */
          assert(state == STATE_TITLE || state == STATE_PLAYING);
          break;
+
       case STATE_PAUSED:
          assert(state == STATE_PLAYING || state == STATE_TITLE);
+         if (state == STATE_TITLE)
+         {
+            end_game();
+            game.suspended = true; /* mid-game suspend: title START will resume */
+         }
+         break;
+
+      case STATE_HIGHSCORES:
+         assert(state == STATE_TITLE);
+         break;
    }
 
    game.state = state;
@@ -413,6 +596,58 @@ void handle_input(key_state_t *ks)
          change_state(STATE_PLAYING);
          add_tile();
       }
+      else if ((game.state == STATE_TITLE || game.state == STATE_GAME_OVER) &&
+               !ks->select && game.old_ks.select)
+         change_state(STATE_HIGHSCORES);
+   }
+   else if (game.state == STATE_NAME_ENTRY)
+   {
+      if (ks->up && !game.old_ks.up)
+         game.name_entry[game.name_cursor] =
+               (game.name_entry[game.name_cursor] - 'A' + 1) % 26 + 'A';
+      if (ks->down && !game.old_ks.down)
+         game.name_entry[game.name_cursor] =
+               (game.name_entry[game.name_cursor] - 'A' + 25) % 26 + 'A';
+      if (ks->left && !game.old_ks.left && game.name_cursor > 0)
+         game.name_cursor--;
+      if (ks->right && !game.old_ks.right && game.name_cursor < 2)
+         game.name_cursor++;
+      if (ks->start && !game.old_ks.start)
+      {
+         add_highscore(game.name_entry, game.score);
+         change_state(STATE_GAME_OVER);
+      }
+   }
+   else if (game.state == STATE_HIGHSCORES)
+   {
+      if (ks->up && !game.old_ks.up)
+         game.hs_row_focus = 0;
+      if (ks->down && !game.old_ks.down)
+         game.hs_row_focus = 1;
+
+      if (game.hs_row_focus == 0)
+      {
+         /* left/right navigates player pages */
+         if (ks->left && !game.old_ks.left)
+         {
+            int num_pages = count_hs_players() + 1;
+            game.hs_page  = (game.hs_page + num_pages - 1) % num_pages;
+         }
+         else if (ks->right && !game.old_ks.right)
+         {
+            int num_pages = count_hs_players() + 1;
+            game.hs_page  = (game.hs_page + 1) % num_pages;
+         }
+      }
+      else
+      {
+         /* left/right cycles time filter */
+         if ((ks->left && !game.old_ks.left) || (ks->right && !game.old_ks.right))
+            game.hs_time_filter = !game.hs_time_filter;
+      }
+
+      if ((!ks->start && game.old_ks.start) || (!ks->select && game.old_ks.select))
+         change_state(STATE_TITLE);
    }
    else if (game.state == STATE_PLAYING)
    {
@@ -424,18 +659,15 @@ void handle_input(key_state_t *ks)
          game.direction = DIR_DOWN;
       else if (ks->left && !game.old_ks.left)
          game.direction = DIR_LEFT;
-      else if (ks->start && !game.old_ks.start)
+      if (ks->start && !game.old_ks.start)
          change_state(STATE_PAUSED);
    }
    else if (game.state == STATE_PAUSED)
    {
       if (ks->start && !game.old_ks.start)
          change_state(STATE_PLAYING);
-      else if (ks->select && !game.old_ks.select)
-      {
-         game.state = STATE_PLAYING;
-         start_game();
-      }
+      else if (!ks->select && game.old_ks.select)
+         change_state(STATE_TITLE);
    }
 
    game.old_ks = *ks;

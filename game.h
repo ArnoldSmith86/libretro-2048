@@ -14,6 +14,8 @@
 #define GRID_HEIGHT  4
 #define GRID_SIZE    (GRID_WIDTH * GRID_HEIGHT)
 
+#define MAX_HIGHSCORES 100
+
 #define BOARD_WIDTH  (SPACING + TILE_SIZE * GRID_WIDTH  + SPACING * (GRID_WIDTH  - 1) + SPACING)
 #define BOARD_HEIGHT (SPACING + TILE_SIZE * GRID_HEIGHT + SPACING * (GRID_HEIGHT - 1) + SPACING)
 
@@ -50,8 +52,19 @@ typedef enum
    STATE_PLAYING,
    STATE_GAME_OVER,
    STATE_WON,
-   STATE_PAUSED
+   STATE_PAUSED,
+   STATE_NAME_ENTRY,
+   STATE_HIGHSCORES
 } game_state_t;
+
+typedef struct {
+   char    name[4];
+   int     score;
+   int16_t year;
+   uint8_t month;
+   uint8_t day;
+   uint8_t best_tile;   /* exponent: actual tile = 1 << best_tile */
+} highscore_entry_t;
 
 typedef struct vector
 {
@@ -76,6 +89,16 @@ typedef struct game {
    key_state_t old_ks;
    direction_t direction;
    cell_t grid[GRID_SIZE];
+
+   highscore_entry_t highscores[MAX_HIGHSCORES];
+   int               hs_count;
+   char              last_name[4];
+   char              name_entry[4];
+   int               name_cursor;
+   int               hs_page;
+   bool              suspended;   /* true when exited to menu mid-game via pause */
+   int               hs_time_filter;  /* 0=all time, 1=this month */
+   int               hs_row_focus;    /* 0=player row focused, 1=time filter row focused */
 } game_t;
 
 extern retro_environment_t environ_cb;
@@ -98,5 +121,7 @@ void render_playing(void);
 void render_title(void);
 void render_win_or_game_over(void);
 void render_paused(void);
+void render_name_entry(void);
+void render_highscores(void);
 
 #endif /* GAME_H */

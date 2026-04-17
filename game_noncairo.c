@@ -479,17 +479,26 @@ void render_title(void)
    draw_text_centered(ctx, "2048", 0, 0, SCREEN_WIDTH, TILE_SIZE*3);
 
 
-   if (dark_theme)
-      set_rgb(ctx, 70, 83, 96);
-   else
-      set_rgb(ctx, 185, 172, 159);
-   fill_rectangle(ctx, TILE_SIZE / 2, TILE_SIZE * 4, SCREEN_HEIGHT - TILE_SIZE * 2, FONT_SIZE * 3);
+   {
+      int bw = SCREEN_HEIGHT - TILE_SIZE * 2;
+      int bh = FONT_SIZE * 3;
+      int bx = TILE_SIZE / 2;
+      int by = TILE_SIZE * 4;
 
-   nullctx_fontsize(1);
-   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+      if (dark_theme) set_rgb(ctx, 70, 83, 96);
+      else            set_rgb(ctx, 185, 172, 159);
+      fill_rectangle(ctx, bx, by, bw, bh);
+      fill_rectangle(ctx, bx, by + bh + SPACING, bw, bh);
 
-   draw_text_centered(ctx, "PRESS START", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING,
-                      SCREEN_HEIGHT - TILE_SIZE * 2 - SPACING * 2, FONT_SIZE * 3 - SPACING * 2);
+      nullctx_fontsize(1);
+      nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+      draw_text_centered(ctx, game_get_suspended() ? "START: Continue" : "START: New Game",
+                         bx + SPACING, by + SPACING,
+                         bw - SPACING * 2, bh - SPACING * 2);
+      draw_text_centered(ctx, "SELECT: Scores",
+                         bx + SPACING, by + bh + SPACING * 2,
+                         bw - SPACING * 2, bh - SPACING * 2);
+   }
 
 }
 
@@ -548,15 +557,23 @@ void render_win_or_game_over(void)
    }
    else
    {
-      if (dark_theme)
-         set_rgb(ctx, 70, 83, 96);
-      else
-         set_rgb(ctx, 185, 172, 159);
-      fill_rectangle(ctx, TILE_SIZE / 2, TILE_SIZE * 4, SCREEN_HEIGHT - TILE_SIZE * 2, FONT_SIZE * 3);
+      int bw = SCREEN_HEIGHT - TILE_SIZE * 2;
+      int bh = FONT_SIZE * 3;
+      int bx = TILE_SIZE / 2;
+      int by = TILE_SIZE * 4;
+
+      if (dark_theme) set_rgb(ctx, 70, 83, 96);
+      else            set_rgb(ctx, 185, 172, 159);
+      fill_rectangle(ctx, bx, by, bw, bh);
+      fill_rectangle(ctx, bx, by + bh + SPACING, bw, bh);
 
       nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
-      draw_text_centered(ctx, "PRESS START", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING,
-                         SCREEN_HEIGHT - TILE_SIZE * 2 - SPACING * 2, FONT_SIZE * 3 - SPACING * 2);
+      draw_text_centered(ctx, "START: New Game",
+                         bx + SPACING, by + SPACING,
+                         bw - SPACING * 2, bh - SPACING * 2);
+      draw_text_centered(ctx, "SELECT: Scores",
+                         bx + SPACING, by + bh + SPACING * 2,
+                         bw - SPACING * 2, bh - SPACING * 2);
    }
 }
 
@@ -598,10 +615,290 @@ void render_paused(void)
 
    nullctx.color= dark_theme ? color_lut_dark[1] : color_lut[1];
 
-   draw_text_centered(ctx, "SELECT: New Game", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING,
+   draw_text_centered(ctx, "START: Continue", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING,
                       SCREEN_HEIGHT - TILE_SIZE * 2 - SPACING * 2, FONT_SIZE * 3 - SPACING * 2);
-   draw_text_centered(ctx, "START: Continue", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING + FONT_SIZE * 2,
+   draw_text_centered(ctx, "SELECT: Main Menu", TILE_SIZE / 2 + SPACING, TILE_SIZE * 4 + SPACING + FONT_SIZE * 2,
                       SCREEN_HEIGHT - TILE_SIZE * 2 - SPACING * 2, FONT_SIZE * 3 - SPACING * 2);
+}
+
+/* ---------- highscore helpers ---------- */
+
+/* Collect unique player names sorted alphabetically, return count. */
+static int hs_get_player_names(char names[][4], int max)
+{
+   highscore_entry_t *hs  = game_get_highscores();
+   int                cnt = game_get_hs_count();
+   int count = 0;
+   int i, j;
+   char tmp[4];
+
+   for (i = 0; i < cnt && count < max; i++)
+   {
+      bool found = false;
+      for (j = 0; j < count; j++)
+         if (strncmp(names[j], hs[i].name, 3) == 0) { found = true; break; }
+      if (!found)
+      {
+         strncpy(names[count], hs[i].name, 3);
+         names[count][3] = '\0';
+         count++;
+      }
+   }
+
+   /* bubble sort alphabetically */
+   for (i = 0; i < count - 1; i++)
+      for (j = i + 1; j < count; j++)
+         if (strcmp(names[i], names[j]) > 0)
+         {
+            strncpy(tmp, names[i], 4);
+            strncpy(names[i], names[j], 4);
+            strncpy(names[j], tmp, 4);
+         }
+   return count;
+}
+
+/* Fill indices[] with up to 15 best entries, optionally filtered by name
+ * and/or time (time_filter: 0=all time, 1=this month). */
+static void hs_top15(int *indices, int *count_out, const char *filter, int time_filter)
+{
+   highscore_entry_t *hs  = game_get_highscores();
+   int                cnt = game_get_hs_count();
+   bool used[MAX_HIGHSCORES];
+   int count = 0;
+   int i;
+   int cur_month = 0, cur_year = 0;
+
+   if (time_filter == 1)
+   {
+      time_t now = time(NULL);
+      struct tm *tm_now = localtime(&now);
+      cur_month = tm_now->tm_mon + 1;
+      cur_year  = tm_now->tm_year + 1900;
+   }
+
+   memset(used, 0, sizeof(used));
+
+   while (count < 15)
+   {
+      int best_score = -1, best_i = -1;
+      for (i = 0; i < cnt; i++)
+      {
+         if (used[i]) continue;
+         if (filter && strncmp(hs[i].name, filter, 3) != 0) continue;
+         if (time_filter == 1 &&
+             (hs[i].month != cur_month || hs[i].year != cur_year)) continue;
+         if (hs[i].score > best_score)
+         { best_score = hs[i].score; best_i = i; }
+      }
+      if (best_i == -1) break;
+      indices[count++] = best_i;
+      used[best_i] = true;
+   }
+   *count_out = count;
+}
+
+/* ---------- render_name_entry ---------- */
+
+void render_name_entry(void)
+{
+   int ctx = 0;
+   char tmp[32];
+   const char *name  = game_get_name_entry();
+   int         cur   = game_get_name_cursor();
+   int letter_w      = TILE_SIZE;
+   int total_w       = letter_w * 3 + SPACING * 2;
+   int start_x       = (SCREEN_WIDTH - total_w) / 2;
+   int by            = TILE_SIZE * 2 + FONT_SIZE * 4;
+   int instr_y       = by + letter_w + SPACING * 2;
+   int i;
+
+   render_playing();
+
+   if (dark_theme) set_rgba(ctx, 5, 7, 16, 0.85);
+   else            set_rgba(ctx, 250, 248, 239, 0.85);
+   fill_rectangle(ctx, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+   /* "Game Over" */
+   nullctx_fontsize(2);
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   draw_text_centered(ctx, "Game Over", 0, 0, SCREEN_WIDTH, TILE_SIZE * 2);
+
+   /* score */
+   nullctx_fontsize(1);
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   sprintf(tmp, "Score: %i", game_get_score());
+   draw_text_centered(ctx, tmp, 0, TILE_SIZE * 2, SCREEN_WIDTH, FONT_SIZE * 2);
+
+   /* "Enter Your Name:" */
+   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+   draw_text_centered(ctx, "Enter Your Name:",
+                      0, TILE_SIZE * 2 + FONT_SIZE * 2 + SPACING * 2, SCREEN_WIDTH, 0);
+
+   /* three letter boxes */
+   for (i = 0; i < 3; i++)
+   {
+      int bx = start_x + i * (letter_w + SPACING);
+
+      if (i == cur)
+      { if (dark_theme) set_rgb(ctx, 100, 120, 140); else set_rgb(ctx, 230, 220, 200); }
+      else
+      { if (dark_theme) set_rgb(ctx, 70, 83, 96);    else set_rgb(ctx, 185, 172, 159); }
+      fill_rectangle(ctx, bx, by, letter_w, letter_w);
+
+      nullctx_fontsize(3);
+      if (i == cur)
+         set_rgb(ctx, 119, 110, 101);
+      else
+         nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+      tmp[0] = name[i]; tmp[1] = '\0';
+      draw_text_centered(ctx, tmp, bx, by, letter_w, letter_w);
+   }
+
+   /* instruction box */
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   fill_rectangle(ctx, TILE_SIZE / 2, instr_y,
+                  SCREEN_WIDTH - TILE_SIZE, FONT_SIZE * 2 * 3 + SPACING * 2);
+
+   nullctx_fontsize(1);
+   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+   draw_text_centered(ctx, "UP/DOWN: Change Letter",
+                      TILE_SIZE / 2 + SPACING, instr_y + SPACING,
+                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
+   draw_text_centered(ctx, "LEFT/RIGHT: Move Cursor",
+                      TILE_SIZE / 2 + SPACING, instr_y + SPACING + FONT_SIZE * 2,
+                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
+   draw_text_centered(ctx, "START: Confirm",
+                      TILE_SIZE / 2 + SPACING, instr_y + SPACING + FONT_SIZE * 4,
+                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
+}
+
+/* ---------- render_highscores ---------- */
+
+void render_highscores(void)
+{
+   int  ctx = 0;
+   char tmp[64];
+   char player_names[MAX_HIGHSCORES][4];
+   int  player_count;
+   int  num_pages;
+   int  hs_page   = game_get_hs_page();
+   highscore_entry_t *hs = game_get_highscores();
+   int  indices[15];
+   int  entry_count = 0;
+   const char *filter = NULL;
+   int  i, y;
+
+   /* full background */
+   if (dark_theme) set_rgb(ctx, 5, 7, 16);
+   else            set_rgb(ctx, 250, 248, 239);
+   fill_rectangle(ctx, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+   /* title box */
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   fill_rectangle(ctx, SPACING, SPACING,
+                  SCREEN_WIDTH - SPACING * 2, FONT_SIZE * 2 + SPACING * 2);
+
+   nullctx_fontsize(2);
+   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+   draw_text_centered(ctx, "HIGHSCORES",
+                      SPACING * 2, SPACING * 2,
+                      SCREEN_WIDTH - SPACING * 4, FONT_SIZE * 2);
+
+   player_count = hs_get_player_names(player_names, MAX_HIGHSCORES);
+   num_pages    = player_count + 1; /* page 0 = global */
+
+   /* page indicator */
+   y = SPACING * 2 + FONT_SIZE * 2 + SPACING * 4;
+   nullctx_fontsize(1);
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+
+   {
+      int row_focus   = game_get_hs_row_focus();
+      int time_filter = game_get_hs_time_filter();
+      bool arrows     = (row_focus == 0) && (num_pages > 1);
+
+      /* player row */
+      if (num_pages <= 1)
+      {
+         strcpy(tmp, "ALL");
+         filter = NULL;
+      }
+      else if (hs_page == 0)
+      {
+         filter = NULL;
+         if (arrows)
+            sprintf(tmp, "< ALL  %d/%d >", hs_page + 1, num_pages);
+         else
+            sprintf(tmp, "ALL  %d/%d", hs_page + 1, num_pages);
+      }
+      else
+      {
+         filter = player_names[hs_page - 1];
+         if (arrows)
+            sprintf(tmp, "< %-3s  %d/%d >", filter, hs_page + 1, num_pages);
+         else
+            sprintf(tmp, "%-3s  %d/%d", filter, hs_page + 1, num_pages);
+      }
+      draw_text_centered(ctx, tmp, 0, y, SCREEN_WIDTH, 0);
+      y += FONT_SIZE + SPACING;
+
+      /* time filter row */
+      const char *tf_label = (time_filter == 1) ? "THIS MONTH" : "ALL TIME";
+      if (row_focus == 1)
+         sprintf(tmp, "< %s >", tf_label);
+      else
+         strcpy(tmp, tf_label);
+      draw_text_centered(ctx, tmp, 0, y, SCREEN_WIDTH, 0);
+      y += FONT_SIZE + SPACING;
+   }
+
+   /* separator */
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   fill_rectangle(ctx, SPACING, y, SCREEN_WIDTH - SPACING * 2, 1);
+   y += SPACING * 2;
+
+   /* entries */
+   hs_top15(indices, &entry_count, filter, game_get_hs_time_filter());
+
+   if (dark_theme) set_rgb(ctx, 40, 50, 60);
+   else            set_rgb(ctx, 200, 190, 180);
+
+   for (i = 0; i < 15; i++)
+   {
+      nullctx_fontsize(1);
+      if (i < entry_count)
+      {
+         highscore_entry_t *e = &hs[indices[i]];
+         sprintf(tmp, "%2d  %-3s   %7d   %6d  %02d/%02d/%02d",
+                 i + 1, e->name, e->score, (1 << e->best_tile),
+                 e->day, e->month, (int)(e->year % 100));
+      }
+      else
+      {
+         sprintf(tmp, "%2d  %-3s   %7s   %6s  %s", i + 1, "---", "---", "---", "--/--/--");
+      }
+      draw_text_centered(ctx, tmp, 0, y, SCREEN_WIDTH, 0);
+      y += FONT_SIZE - 4;
+   }
+
+   y += SPACING;
+
+   /* footer box */
+   if (dark_theme) set_rgb(ctx, 70, 83, 96);
+   else            set_rgb(ctx, 185, 172, 159);
+   fill_rectangle(ctx, SPACING, y, SCREEN_WIDTH - SPACING * 2, FONT_SIZE + SPACING * 2);
+
+   nullctx_fontsize(1);
+   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+   draw_text_centered(ctx, "L/R: Page   START/SELECT: Back",
+                      SPACING * 2, y + SPACING,
+                      SCREEN_WIDTH - SPACING * 4, FONT_SIZE);
 }
 
 int game_init_pixelformat(void)
