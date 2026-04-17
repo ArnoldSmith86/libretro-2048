@@ -539,8 +539,8 @@ void change_state(game_state_t state)
 
       case STATE_PLAYING:
          assert(state == STATE_NAME_ENTRY || state == STATE_WON || state == STATE_PAUSED);
-         if (state == STATE_WON)
-            end_game();
+         /* Don't save best score on reaching 2048 — end_game() fires on
+          * NAME_ENTRY→GAME_OVER (actual game end) or WON→TITLE (menu exit). */
          if (state == STATE_NAME_ENTRY)
          {
             if (game.last_name[0] >= 'A' && game.last_name[0] <= 'Z')
@@ -560,9 +560,12 @@ void change_state(game_state_t state)
          break;
 
       case STATE_WON:
-         end_game();
+         /* Only save best score when returning to menu, not when continuing */
          if (state == STATE_TITLE)
+         {
+            end_game();
             game.suspended = false; /* won game → fresh start from title */
+         }
          assert(state == STATE_TITLE || state == STATE_PLAYING);
          break;
 
