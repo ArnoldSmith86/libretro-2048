@@ -27,6 +27,7 @@ int game_get_name_cursor(void);
 bool game_get_suspended(void);
 int game_get_hs_time_filter(void);
 int game_get_hs_row_focus(void);
+bool game_get_auto_diagonals(void);
 int *game_get_delta_score(void);
 float *game_get_delta_score_time(void);
 float *game_get_frame_time(void);

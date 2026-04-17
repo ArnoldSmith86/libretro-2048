@@ -484,11 +484,16 @@ void render_title(void)
       int bh = FONT_SIZE * 3;
       int bx = TILE_SIZE / 2;
       int by = TILE_SIZE * 4;
+      char diag_label[32];
+
+      sprintf(diag_label, "< AUTO DIAGONALS: %s >",
+              game_get_auto_diagonals() ? "ON" : "OFF");
 
       if (dark_theme) set_rgb(ctx, 70, 83, 96);
       else            set_rgb(ctx, 185, 172, 159);
-      fill_rectangle(ctx, bx, by, bw, bh);
-      fill_rectangle(ctx, bx, by + bh + SPACING, bw, bh);
+      fill_rectangle(ctx, bx, by,                          bw, bh);
+      fill_rectangle(ctx, bx, by + (bh + SPACING),         bw, bh);
+      fill_rectangle(ctx, bx, by + (bh + SPACING) * 2,     bw, bh);
 
       nullctx_fontsize(1);
       nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
@@ -496,7 +501,10 @@ void render_title(void)
                          bx + SPACING, by + SPACING,
                          bw - SPACING * 2, bh - SPACING * 2);
       draw_text_centered(ctx, "SELECT: Scores",
-                         bx + SPACING, by + bh + SPACING * 2,
+                         bx + SPACING, by + (bh + SPACING) + SPACING,
+                         bw - SPACING * 2, bh - SPACING * 2);
+      draw_text_centered(ctx, diag_label,
+                         bx + SPACING, by + (bh + SPACING) * 2 + SPACING,
                          bw - SPACING * 2, bh - SPACING * 2);
    }
 

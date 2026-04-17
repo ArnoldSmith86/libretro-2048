@@ -90,6 +90,7 @@ typedef struct game {
    direction_t direction;
    cell_t grid[GRID_SIZE];
 
+
    highscore_entry_t highscores[MAX_HIGHSCORES];
    int               hs_count;
    char              last_name[4];
@@ -99,6 +100,7 @@ typedef struct game {
    bool              suspended;   /* true when exited to menu mid-game via pause */
    int               hs_time_filter;  /* 0=all time, 1=this month */
    int               hs_row_focus;    /* 0=player row focused, 1=time filter row focused */
+   bool              auto_diagonals;  /* alternate inputs when two directions held simultaneously */
 } game_t;
 
 extern retro_environment_t environ_cb;
