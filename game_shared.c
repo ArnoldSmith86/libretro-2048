@@ -309,11 +309,8 @@ static bool move_tiles(void)
             game.score += 2 << next->value;
             moved = true;
 
-            if (next->value == 11 && !game.won_before)
-            {
-               game.won_before = true;
+            if (next->value == 11)
                change_state(STATE_WON);
-            }
          }
          else if (farthest != cell)
          {
