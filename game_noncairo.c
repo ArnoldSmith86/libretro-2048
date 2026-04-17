@@ -483,7 +483,7 @@ void render_title(void)
       int bw = SCREEN_HEIGHT - TILE_SIZE * 2;
       int bh = FONT_SIZE * 3;
       int bx = TILE_SIZE / 2;
-      int by = TILE_SIZE * 4;
+      int by = TILE_SIZE * 3 + SPACING * 2;
       char diag_label[32];
 
       sprintf(diag_label, "< AUTO DIAGONALS: %s >",
