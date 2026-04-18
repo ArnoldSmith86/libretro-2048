@@ -143,11 +143,16 @@ void game_validate(void)
 {
    int i;
 
+   /* Never carry over button state across sessions — a saved old_ks with
+    * any button set causes a spurious release event on the first frame,
+    * which can trigger unintended state transitions (e.g. TITLE → SCORES). */
+   memset(&game.old_ks, 0, sizeof(game.old_ks));
+
    /* State must be one of the known values; anything else → title */
    if (game.state < STATE_TITLE || game.state > STATE_HIGHSCORES)
       game.state = STATE_TITLE;
-   /* Don't restore highscores screen across sessions */
-   if (game.state == STATE_HIGHSCORES)
+   /* Don't restore highscores or game-over screen across sessions */
+   if (game.state == STATE_HIGHSCORES || game.state == STATE_GAME_OVER)
       game.state = STATE_TITLE;
 
    /* Clamp player count */
