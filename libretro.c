@@ -1,4 +1,5 @@
 #include "game.h"
+#include "game_shared.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -348,7 +349,11 @@ void retro_run(void)
          read_save_file();
          use_sram_file = true;
       }
-      
+
+      /* Clamp any fields that may be corrupt from a save made with an
+       * older struct layout. Safe to call even on a fresh/clean save. */
+      game_validate();
+
       check_variables();
 
       first_run = false;

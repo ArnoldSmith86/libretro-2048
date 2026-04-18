@@ -659,14 +659,26 @@ static int hs_get_player_names(char names[][4], int max)
 }
 
 /* Return the score list and count to use for a player given time_filter.
- * time_filter==1 uses the dedicated monthly list; 0 uses the all-time list. */
+ * time_filter==1 uses the dedicated monthly list; 0 uses the all-time list.
+ * Clamps the count against MAX_SCORES_PER_PLAYER to guard against corrupt saves. */
 static highscore_entry_t *player_list(player_record_t *p, int time_filter,
                                       int *cnt_out)
 {
+   int cnt;
    if (time_filter == 1)
-   { *cnt_out = p->month_score_count; return p->month_scores; }
+   {
+      cnt = p->month_score_count;
+      if (cnt < 0 || cnt > MAX_SCORES_PER_PLAYER) cnt = 0;
+      *cnt_out = cnt;
+      return p->month_scores;
+   }
    else
-   { *cnt_out = p->score_count; return p->scores; }
+   {
+      cnt = p->score_count;
+      if (cnt < 0 || cnt > MAX_SCORES_PER_PLAYER) cnt = 0;
+      *cnt_out = cnt;
+      return p->scores;
+   }
 }
 
 /* Fill out[] with up to 15 entry pointers and parallel names_out[][4].

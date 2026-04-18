@@ -12,6 +12,7 @@ void *game_save_data(void);
 unsigned game_data_size(void);
 void render_game(void);
 void init_game(void);
+void game_validate(void);
 void start_game(void);
 void change_state(game_state_t state);
 game_state_t game_get_state(void);
