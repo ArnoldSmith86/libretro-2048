@@ -631,26 +631,19 @@ void render_paused(void)
 
 /* ---------- highscore helpers ---------- */
 
-/* Collect unique player names sorted alphabetically, return count. */
+/* Collect player names sorted alphabetically, return count. */
 static int hs_get_player_names(char names[][4], int max)
 {
-   highscore_entry_t *hs  = game_get_highscores();
-   int                cnt = game_get_hs_count();
-   int count = 0;
+   player_record_t *players = game_get_players();
+   int              cnt     = game_get_player_count();
+   int count = cnt < max ? cnt : max;
    int i, j;
    char tmp[4];
 
-   for (i = 0; i < cnt && count < max; i++)
+   for (i = 0; i < count; i++)
    {
-      bool found = false;
-      for (j = 0; j < count; j++)
-         if (strncmp(names[j], hs[i].name, 3) == 0) { found = true; break; }
-      if (!found)
-      {
-         strncpy(names[count], hs[i].name, 3);
-         names[count][3] = '\0';
-         count++;
-      }
+      strncpy(names[i], players[i].name, 3);
+      names[i][3] = '\0';
    }
 
    /* bubble sort alphabetically */
@@ -665,16 +658,18 @@ static int hs_get_player_names(char names[][4], int max)
    return count;
 }
 
-/* Fill indices[] with up to 15 best entries, optionally filtered by name
- * and/or time (time_filter: 0=all time, 1=this month). */
-static void hs_top15(int *indices, int *count_out, const char *filter, int time_filter)
+/* Fill out[] with up to 15 entry pointers and parallel names_out[][4].
+ * filter=NULL: global view — best score per player (one entry each).
+ * filter=name: that player's personal top scores.
+ * time_filter: 0=all time, 1=this month (per-player, not global pool). */
+static void hs_top15(highscore_entry_t **out, char (*names_out)[4],
+                     int *count_out, const char *filter, int time_filter)
 {
-   highscore_entry_t *hs  = game_get_highscores();
-   int                cnt = game_get_hs_count();
-   bool used[MAX_HIGHSCORES];
+   player_record_t *players = game_get_players();
+   int              pcnt    = game_get_player_count();
    int count = 0;
-   int i;
    int cur_month = 0, cur_year = 0;
+   int p, s;
 
    if (time_filter == 1)
    {
@@ -684,24 +679,89 @@ static void hs_top15(int *indices, int *count_out, const char *filter, int time_
       cur_year  = tm_now->tm_year + 1900;
    }
 
-   memset(used, 0, sizeof(used));
-
-   while (count < 15)
+   if (filter)
    {
-      int best_score = -1, best_i = -1;
-      for (i = 0; i < cnt; i++)
+      /* Per-player view: show this player's personal top scores */
+      player_record_t *player = NULL;
+      bool used[MAX_SCORES_PER_PLAYER];
+
+      for (p = 0; p < pcnt; p++)
+         if (strncmp(players[p].name, filter, 3) == 0)
+         { player = &players[p]; break; }
+
+      if (player)
       {
-         if (used[i]) continue;
-         if (filter && strncmp(hs[i].name, filter, 3) != 0) continue;
-         if (time_filter == 1 &&
-             (hs[i].month != cur_month || hs[i].year != cur_year)) continue;
-         if (hs[i].score > best_score)
-         { best_score = hs[i].score; best_i = i; }
+         memset(used, 0, sizeof(used));
+         while (count < 15)
+         {
+            int best_score = -1, best_s = -1;
+            for (s = 0; s < player->score_count; s++)
+            {
+               if (used[s]) continue;
+               if (time_filter == 1 &&
+                   (player->scores[s].month != cur_month ||
+                    player->scores[s].year  != cur_year)) continue;
+               if (player->scores[s].score > best_score)
+               { best_score = player->scores[s].score; best_s = s; }
+            }
+            if (best_s == -1) break;
+            out[count] = &player->scores[best_s];
+            strncpy(names_out[count], player->name, 3);
+            names_out[count][3] = '\0';
+            count++;
+            used[best_s] = true;
+         }
       }
-      if (best_i == -1) break;
-      indices[count++] = best_i;
-      used[best_i] = true;
    }
+   else
+   {
+      /* Global view: best score per player, sorted by score */
+      highscore_entry_t *best[MAX_PLAYERS];
+      char               best_names[MAX_PLAYERS][4];
+      bool used[MAX_PLAYERS];
+      int best_cnt = 0;
+
+      memset(used, 0, sizeof(used));
+
+      /* Find each player's best (respecting time filter) */
+      for (p = 0; p < pcnt; p++)
+      {
+         highscore_entry_t *pb = NULL;
+         for (s = 0; s < players[p].score_count; s++)
+         {
+            highscore_entry_t *e = &players[p].scores[s];
+            if (time_filter == 1 &&
+                (e->month != cur_month || e->year != cur_year)) continue;
+            if (!pb || e->score > pb->score)
+               pb = e;
+         }
+         if (pb)
+         {
+            best[best_cnt] = pb;
+            strncpy(best_names[best_cnt], players[p].name, 3);
+            best_names[best_cnt][3] = '\0';
+            best_cnt++;
+         }
+      }
+
+      /* Pick top 15 by score */
+      while (count < 15)
+      {
+         int top_score = -1, top_i = -1;
+         for (p = 0; p < best_cnt; p++)
+         {
+            if (used[p]) continue;
+            if (best[p]->score > top_score)
+            { top_score = best[p]->score; top_i = p; }
+         }
+         if (top_i == -1) break;
+         out[count] = best[top_i];
+         strncpy(names_out[count], best_names[top_i], 4);
+         count++;
+         used[top_i] = true;
+      }
+   }
+
    *count_out = count;
 }
 
@@ -793,12 +853,12 @@ void render_highscores(void)
 {
    int  ctx = 0;
    char tmp[64];
-   char player_names[MAX_HIGHSCORES][4];
+   char player_names[MAX_PLAYERS][4];
    int  player_count;
    int  num_pages;
    int  hs_page   = game_get_hs_page();
-   highscore_entry_t *hs = game_get_highscores();
-   int  indices[15];
+   highscore_entry_t *entries[15];
+   char entry_names[15][4];
    int  entry_count = 0;
    const char *filter = NULL;
    int  i, y;
@@ -820,7 +880,7 @@ void render_highscores(void)
                       SPACING * 2, SPACING * 2,
                       SCREEN_WIDTH - SPACING * 4, FONT_SIZE * 2);
 
-   player_count = hs_get_player_names(player_names, MAX_HIGHSCORES);
+   player_count = hs_get_player_names(player_names, MAX_PLAYERS);
    num_pages    = player_count + 1; /* page 0 = global */
 
    /* page indicator */
@@ -876,7 +936,7 @@ void render_highscores(void)
    y += SPACING * 2;
 
    /* entries */
-   hs_top15(indices, &entry_count, filter, game_get_hs_time_filter());
+   hs_top15(entries, entry_names, &entry_count, filter, game_get_hs_time_filter());
 
    if (dark_theme) set_rgb(ctx, 40, 50, 60);
    else            set_rgb(ctx, 200, 190, 180);
@@ -886,9 +946,9 @@ void render_highscores(void)
       nullctx_fontsize(1);
       if (i < entry_count)
       {
-         highscore_entry_t *e = &hs[indices[i]];
+         highscore_entry_t *e = entries[i];
          sprintf(tmp, "%2d  %-3s   %7d   %6d  %02d/%02d/%02d",
-                 i + 1, e->name, e->score, (1 << e->best_tile),
+                 i + 1, entry_names[i], e->score, (1 << e->best_tile),
                  e->day, e->month, (int)(e->year % 100));
       }
       else
