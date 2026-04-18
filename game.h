@@ -14,7 +14,8 @@
 #define GRID_HEIGHT  4
 #define GRID_SIZE    (GRID_WIDTH * GRID_HEIGHT)
 
-#define MAX_HIGHSCORES 100
+#define MAX_PLAYERS           20
+#define MAX_SCORES_PER_PLAYER 10
 
 #define BOARD_WIDTH  (SPACING + TILE_SIZE * GRID_WIDTH  + SPACING * (GRID_WIDTH  - 1) + SPACING)
 #define BOARD_HEIGHT (SPACING + TILE_SIZE * GRID_HEIGHT + SPACING * (GRID_HEIGHT - 1) + SPACING)
@@ -58,13 +59,18 @@ typedef enum
 } game_state_t;
 
 typedef struct {
-   char    name[4];
    int     score;
    int16_t year;
    uint8_t month;
    uint8_t day;
    uint8_t best_tile;   /* exponent: actual tile = 1 << best_tile */
 } highscore_entry_t;
+
+typedef struct {
+   char              name[4];
+   highscore_entry_t scores[MAX_SCORES_PER_PLAYER];
+   int               score_count;
+} player_record_t;
 
 typedef struct vector
 {
@@ -90,8 +96,8 @@ typedef struct game {
    direction_t direction;
    cell_t grid[GRID_SIZE];
 
-   highscore_entry_t highscores[MAX_HIGHSCORES];
-   int               hs_count;
+   player_record_t   players[MAX_PLAYERS];
+   int               player_count;
    char              last_name[4];
    char              name_entry[4];
    int               name_cursor;

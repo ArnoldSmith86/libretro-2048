@@ -373,14 +373,14 @@ cell_t * game_get_grid(void)
    return game.grid;
 }
 
-highscore_entry_t *game_get_highscores(void)
+player_record_t *game_get_players(void)
 {
-   return game.highscores;
+   return game.players;
 }
 
-int game_get_hs_count(void)
+int game_get_player_count(void)
 {
-   return game.hs_count;
+   return game.player_count;
 }
 
 int game_get_hs_page(void)
@@ -415,40 +415,54 @@ int game_get_hs_row_focus(void)
 
 static void add_highscore(const char *name, int score)
 {
-   highscore_entry_t *entry = NULL;
+   player_record_t   *player = NULL;
+   highscore_entry_t *entry  = NULL;
    time_t t;
    struct tm *tm_info;
-   int i, min_idx;
+   int i, gi, min_idx, max_tile;
 
-   if (game.hs_count < MAX_HIGHSCORES)
+   /* Find or create player record */
+   for (i = 0; i < game.player_count; i++)
+      if (strncmp(game.players[i].name, name, 3) == 0)
+      { player = &game.players[i]; break; }
+
+   if (!player)
    {
-      entry = &game.highscores[game.hs_count++];
+      if (game.player_count >= MAX_PLAYERS)
+         return;
+      player = &game.players[game.player_count++];
+      strncpy(player->name, name, 3);
+      player->name[3]    = '\0';
+      player->score_count = 0;
+   }
+
+   /* Find slot in player's personal list */
+   if (player->score_count < MAX_SCORES_PER_PLAYER)
+   {
+      entry = &player->scores[player->score_count++];
    }
    else
    {
+      /* Replace their lowest score if this one is better */
       min_idx = 0;
-      for (i = 1; i < MAX_HIGHSCORES; i++)
-         if (game.highscores[i].score < game.highscores[min_idx].score)
+      for (i = 1; i < player->score_count; i++)
+         if (player->scores[i].score < player->scores[min_idx].score)
             min_idx = i;
-      if (score > game.highscores[min_idx].score)
-         entry = &game.highscores[min_idx];
+      if (score > player->scores[min_idx].score)
+         entry = &player->scores[min_idx];
    }
 
    if (!entry)
       return;
 
-   strncpy(entry->name, name, 3);
-   entry->name[3] = '\0';
-   entry->score   = score;
    strncpy(game.last_name, name, 4);
+   entry->score = score;
 
-   {
-      int gi, max_tile = 0;
-      for (gi = 0; gi < GRID_SIZE; gi++)
-         if (game.grid[gi].value > max_tile)
-            max_tile = game.grid[gi].value;
-      entry->best_tile = (uint8_t)max_tile;
-   }
+   max_tile = 0;
+   for (gi = 0; gi < GRID_SIZE; gi++)
+      if (game.grid[gi].value > max_tile)
+         max_tile = game.grid[gi].value;
+   entry->best_tile = (uint8_t)max_tile;
 
    t       = time(NULL);
    tm_info = localtime(&t);
@@ -468,24 +482,7 @@ static void add_highscore(const char *name, int score)
 
 static int count_hs_players(void)
 {
-   char seen[MAX_HIGHSCORES][4];
-   int count = 0;
-   int i, j;
-
-   for (i = 0; i < game.hs_count; i++)
-   {
-      bool found = false;
-      for (j = 0; j < count; j++)
-         if (strncmp(seen[j], game.highscores[i].name, 3) == 0)
-         { found = true; break; }
-      if (!found)
-      {
-         strncpy(seen[count], game.highscores[i].name, 3);
-         seen[count][3] = '\0';
-         count++;
-      }
-   }
-   return count;
+   return game.player_count;
 }
 
 game_state_t game_get_state(void)
@@ -619,33 +616,17 @@ void handle_input(key_state_t *ks)
       }
       if (!ks->select && game.old_ks.select)
       {
-         /* Collect unique known names (insertion order), find current, step forward */
-         char names[MAX_HIGHSCORES][4];
-         int  count = 0;
-         int  cur_idx = -1;
-         int  i, j;
-
-         for (i = 0; i < game.hs_count; i++)
-         {
-            bool found = false;
-            for (j = 0; j < count; j++)
-               if (strncmp(names[j], game.highscores[i].name, 3) == 0)
-               { found = true; break; }
-            if (!found)
-            {
-               strncpy(names[count], game.highscores[i].name, 3);
-               names[count][3] = '\0';
-               count++;
-            }
-         }
-
+         /* Cycle through known player names */
+         int count = game.player_count;
          if (count > 0)
          {
+            int cur_idx = -1;
+            int j;
             for (j = 0; j < count; j++)
-               if (strncmp(names[j], game.name_entry, 3) == 0)
+               if (strncmp(game.players[j].name, game.name_entry, 3) == 0)
                { cur_idx = j; break; }
             cur_idx = (cur_idx + 1) % count;
-            strncpy(game.name_entry, names[cur_idx], 3);
+            strncpy(game.name_entry, game.players[cur_idx].name, 3);
             game.name_entry[3] = '\0';
          }
       }
