@@ -70,6 +70,11 @@ typedef struct {
    char              name[4];
    highscore_entry_t scores[MAX_SCORES_PER_PLAYER];
    int               score_count;
+   highscore_entry_t month_scores[MAX_SCORES_PER_PLAYER];
+   int               month_score_count;
+   int16_t           month_scores_year;
+   uint8_t           month_scores_month;
+   uint8_t           _pad;
 } player_record_t;
 
 typedef struct vector

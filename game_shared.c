@@ -413,6 +413,25 @@ int game_get_hs_row_focus(void)
    return game.hs_row_focus;
 }
 
+static void fill_entry(highscore_entry_t *entry, int score,
+                       struct tm *tm_info, int max_tile)
+{
+   entry->score     = score;
+   entry->best_tile = (uint8_t)max_tile;
+   if (tm_info)
+   {
+      entry->year  = (int16_t)(tm_info->tm_year + 1900);
+      entry->month = (uint8_t)(tm_info->tm_mon + 1);
+      entry->day   = (uint8_t)tm_info->tm_mday;
+   }
+   else
+   {
+      entry->year  = 0;
+      entry->month = 0;
+      entry->day   = 0;
+   }
+}
+
 static void add_highscore(const char *name, int score)
 {
    player_record_t   *player = NULL;
@@ -420,6 +439,8 @@ static void add_highscore(const char *name, int score)
    time_t t;
    struct tm *tm_info;
    int i, gi, min_idx, max_tile;
+   int16_t cur_year  = 0;
+   uint8_t cur_month = 0;
 
    /* Find or create player record */
    for (i = 0; i < game.player_count; i++)
@@ -432,11 +453,29 @@ static void add_highscore(const char *name, int score)
          return;
       player = &game.players[game.player_count++];
       strncpy(player->name, name, 3);
-      player->name[3]    = '\0';
-      player->score_count = 0;
+      player->name[3]         = '\0';
+      player->score_count     = 0;
+      player->month_score_count = 0;
+      player->month_scores_year  = 0;
+      player->month_scores_month = 0;
    }
 
-   /* Find slot in player's personal list */
+   t       = time(NULL);
+   tm_info = localtime(&t);
+   if (tm_info)
+   {
+      cur_year  = (int16_t)(tm_info->tm_year + 1900);
+      cur_month = (uint8_t)(tm_info->tm_mon + 1);
+   }
+
+   max_tile = 0;
+   for (gi = 0; gi < GRID_SIZE; gi++)
+      if (game.grid[gi].value > max_tile)
+         max_tile = game.grid[gi].value;
+
+   strncpy(game.last_name, name, 4);
+
+   /* --- All-time personal list --- */
    if (player->score_count < MAX_SCORES_PER_PLAYER)
    {
       entry = &player->scores[player->score_count++];
@@ -451,33 +490,36 @@ static void add_highscore(const char *name, int score)
       if (score > player->scores[min_idx].score)
          entry = &player->scores[min_idx];
    }
+   if (entry)
+      fill_entry(entry, score, tm_info, max_tile);
 
-   if (!entry)
-      return;
-
-   strncpy(game.last_name, name, 4);
-   entry->score = score;
-
-   max_tile = 0;
-   for (gi = 0; gi < GRID_SIZE; gi++)
-      if (game.grid[gi].value > max_tile)
-         max_tile = game.grid[gi].value;
-   entry->best_tile = (uint8_t)max_tile;
-
-   t       = time(NULL);
-   tm_info = localtime(&t);
-   if (tm_info)
+   /* --- Monthly personal list --- */
+   /* Reset list if the stored month doesn't match current month */
+   if (player->month_scores_year  != cur_year ||
+       player->month_scores_month != cur_month)
    {
-      entry->year  = (int16_t)(tm_info->tm_year + 1900);
-      entry->month = (uint8_t)(tm_info->tm_mon + 1);
-      entry->day   = (uint8_t)tm_info->tm_mday;
+      player->month_score_count  = 0;
+      player->month_scores_year  = cur_year;
+      player->month_scores_month = cur_month;
+   }
+
+   entry = NULL;
+   if (player->month_score_count < MAX_SCORES_PER_PLAYER)
+   {
+      entry = &player->month_scores[player->month_score_count++];
    }
    else
    {
-      entry->year  = 0;
-      entry->month = 0;
-      entry->day   = 0;
+      /* Replace lowest monthly score if this one is better */
+      min_idx = 0;
+      for (i = 1; i < player->month_score_count; i++)
+         if (player->month_scores[i].score < player->month_scores[min_idx].score)
+            min_idx = i;
+      if (score > player->month_scores[min_idx].score)
+         entry = &player->month_scores[min_idx];
    }
+   if (entry)
+      fill_entry(entry, score, tm_info, max_tile);
 }
 
 static int count_hs_players(void)
