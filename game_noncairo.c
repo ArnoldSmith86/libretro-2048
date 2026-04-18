@@ -770,17 +770,21 @@ void render_name_entry(void)
    fill_rectangle(ctx, TILE_SIZE / 2, instr_y,
                   SCREEN_WIDTH - TILE_SIZE, FONT_SIZE * 2 * 3 + SPACING * 2);
 
-   nullctx_fontsize(1);
-   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
-   draw_text_centered(ctx, "UP/DOWN: Change Letter",
-                      TILE_SIZE / 2 + SPACING, instr_y + SPACING,
-                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
-   draw_text_centered(ctx, "LEFT/RIGHT: Move Cursor",
-                      TILE_SIZE / 2 + SPACING, instr_y + SPACING + FONT_SIZE * 2,
-                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
-   draw_text_centered(ctx, "START: Confirm",
-                      TILE_SIZE / 2 + SPACING, instr_y + SPACING + FONT_SIZE * 4,
-                      SCREEN_WIDTH - TILE_SIZE - SPACING * 2, FONT_SIZE * 2 - SPACING * 2);
+   {
+      static const char *hints[4] = {
+         "UP/DOWN: Change Letter",
+         "LEFT/RIGHT: Move Cursor",
+         "SELECT: Cycle Names",
+         "START: Confirm",
+      };
+      int slot_h = (FONT_SIZE * 2 * 3) / 4;  /* inner height divided by 4 lines */
+      int ix = TILE_SIZE / 2 + SPACING;
+      int iw = SCREEN_WIDTH - TILE_SIZE - SPACING * 2;
+      nullctx_fontsize(1);
+      nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+      for (i = 0; i < 4; i++)
+         draw_text_centered(ctx, hints[i], ix, instr_y + SPACING + slot_h * i, iw, slot_h);
+   }
 }
 
 /* ---------- render_highscores ---------- */
