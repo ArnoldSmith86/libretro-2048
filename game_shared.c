@@ -617,6 +617,38 @@ void handle_input(key_state_t *ks)
          add_highscore(game.name_entry, game.score);
          change_state(STATE_GAME_OVER);
       }
+      if (!ks->select && game.old_ks.select)
+      {
+         /* Collect unique known names (insertion order), find current, step forward */
+         char names[MAX_HIGHSCORES][4];
+         int  count = 0;
+         int  cur_idx = -1;
+         int  i, j;
+
+         for (i = 0; i < game.hs_count; i++)
+         {
+            bool found = false;
+            for (j = 0; j < count; j++)
+               if (strncmp(names[j], game.highscores[i].name, 3) == 0)
+               { found = true; break; }
+            if (!found)
+            {
+               strncpy(names[count], game.highscores[i].name, 3);
+               names[count][3] = '\0';
+               count++;
+            }
+         }
+
+         if (count > 0)
+         {
+            for (j = 0; j < count; j++)
+               if (strncmp(names[j], game.name_entry, 3) == 0)
+               { cur_idx = j; break; }
+            cur_idx = (cur_idx + 1) % count;
+            strncpy(game.name_entry, names[cur_idx], 3);
+            game.name_entry[3] = '\0';
+         }
+      }
    }
    else if (game.state == STATE_HIGHSCORES)
    {
