@@ -995,39 +995,46 @@ void render_highscores(void)
    /* entries */
    hs_top15(entries, entry_names, &entry_count, filter, best_per_player, game_get_hs_time_filter());
 
-   if (dark_theme) set_rgb(ctx, 40, 50, 60);
-   else            set_rgb(ctx, 200, 190, 180);
-
-   for (i = 0; i < 15; i++)
    {
+      /* Pin footer so its bottom margin equals SPACING (same as sides).
+       * Then center the 15-row table in the space between separator and footer. */
+      int footer_h    = FONT_SIZE + SPACING * 2;
+      int footer_y    = SCREEN_HEIGHT - SPACING - footer_h;
+      int table_h     = 15 * (FONT_SIZE - 4);
+      int avail       = footer_y - SPACING - y;
+      int table_y     = y + (avail - table_h) / 2;
+
+      if (dark_theme) set_rgb(ctx, 40, 50, 60);
+      else            set_rgb(ctx, 200, 190, 180);
+
+      for (i = 0; i < 15; i++)
+      {
+         nullctx_fontsize(1);
+         if (i < entry_count)
+         {
+            highscore_entry_t *e = entries[i];
+            sprintf(tmp, "%2d  %-3s   %7d   %6d  %02d/%02d/%02d",
+                    i + 1, entry_names[i], e->score, (1 << e->best_tile),
+                    e->day, e->month, (int)(e->year % 100));
+         }
+         else
+         {
+            sprintf(tmp, "%2d  %-3s   %7s   %6s  %s", i + 1, "---", "---", "---", "--/--/--");
+         }
+         draw_text_centered(ctx, tmp, 0, table_y + i * (FONT_SIZE - 4), SCREEN_WIDTH, 0);
+      }
+
+      /* footer box */
+      if (dark_theme) set_rgb(ctx, 70, 83, 96);
+      else            set_rgb(ctx, 185, 172, 159);
+      fill_rectangle(ctx, SPACING, footer_y, SCREEN_WIDTH - SPACING * 2, footer_h);
+
       nullctx_fontsize(1);
-      if (i < entry_count)
-      {
-         highscore_entry_t *e = entries[i];
-         sprintf(tmp, "%2d  %-3s   %7d   %6d  %02d/%02d/%02d",
-                 i + 1, entry_names[i], e->score, (1 << e->best_tile),
-                 e->day, e->month, (int)(e->year % 100));
-      }
-      else
-      {
-         sprintf(tmp, "%2d  %-3s   %7s   %6s  %s", i + 1, "---", "---", "---", "--/--/--");
-      }
-      draw_text_centered(ctx, tmp, 0, y, SCREEN_WIDTH, 0);
-      y += FONT_SIZE - 4;
+      nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
+      draw_text_centered(ctx, "L/R: Page   START/SELECT: Back",
+                         SPACING * 2, footer_y + SPACING,
+                         SCREEN_WIDTH - SPACING * 4, FONT_SIZE);
    }
-
-   y += SPACING;
-
-   /* footer box */
-   if (dark_theme) set_rgb(ctx, 70, 83, 96);
-   else            set_rgb(ctx, 185, 172, 159);
-   fill_rectangle(ctx, SPACING, y, SCREEN_WIDTH - SPACING * 2, FONT_SIZE + SPACING * 2);
-
-   nullctx_fontsize(1);
-   nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
-   draw_text_centered(ctx, "L/R: Page   START/SELECT: Back",
-                      SPACING * 2, y + SPACING,
-                      SCREEN_WIDTH - SPACING * 4, FONT_SIZE);
 }
 
 int game_init_pixelformat(void)
