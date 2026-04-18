@@ -576,7 +576,7 @@ void render_win_or_game_over(void)
       fill_rectangle(ctx, bx, by + bh + SPACING, bw, bh);
 
       nullctx.color = dark_theme ? color_lut_dark[1] : color_lut[1];
-      draw_text_centered(ctx, "START: New Game",
+      draw_text_centered(ctx, "START: Menu",
                          bx + SPACING, by + SPACING,
                          bw - SPACING * 2, bh - SPACING * 2);
       draw_text_centered(ctx, "SELECT: Scores",

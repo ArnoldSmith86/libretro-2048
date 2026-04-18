@@ -597,7 +597,7 @@ void change_state(game_state_t state)
          break;
 
       case STATE_GAME_OVER:
-         assert(state == STATE_PLAYING || state == STATE_HIGHSCORES);
+         assert(state == STATE_PLAYING || state == STATE_HIGHSCORES || state == STATE_TITLE);
          if (state == STATE_HIGHSCORES)
          {
             game.hs_page        = 0;
@@ -667,8 +667,8 @@ void handle_input(key_state_t *ks)
 
    if (game.state == STATE_TITLE || game.state == STATE_GAME_OVER || game.state == STATE_WON)
    {
-      if (!ks->start && game.old_ks.start)
-         change_state(game.state == STATE_WON ? STATE_TITLE : STATE_PLAYING);
+      if (ks->start && !game.old_ks.start)
+         change_state(game.state == STATE_TITLE ? STATE_PLAYING : STATE_TITLE);
       else if (game.state == STATE_WON && !ks->select && game.old_ks.select)
       {
          change_state(STATE_PLAYING);
