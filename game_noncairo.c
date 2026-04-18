@@ -658,26 +658,29 @@ static int hs_get_player_names(char names[][4], int max)
    return count;
 }
 
+/* Return the score list and count to use for a player given time_filter.
+ * time_filter==1 uses the dedicated monthly list; 0 uses the all-time list. */
+static highscore_entry_t *player_list(player_record_t *p, int time_filter,
+                                      int *cnt_out)
+{
+   if (time_filter == 1)
+   { *cnt_out = p->month_score_count; return p->month_scores; }
+   else
+   { *cnt_out = p->score_count; return p->scores; }
+}
+
 /* Fill out[] with up to 15 entry pointers and parallel names_out[][4].
  * filter=NULL: global view — best score per player (one entry each).
  * filter=name: that player's personal top scores.
- * time_filter: 0=all time, 1=this month (per-player, not global pool). */
+ * time_filter: 0=all time, 1=this month (each player's dedicated monthly list). */
 static void hs_top15(highscore_entry_t **out, char (*names_out)[4],
                      int *count_out, const char *filter, int time_filter)
 {
    player_record_t *players = game_get_players();
    int              pcnt    = game_get_player_count();
    int count = 0;
-   int cur_month = 0, cur_year = 0;
-   int p, s;
-
-   if (time_filter == 1)
-   {
-      time_t now = time(NULL);
-      struct tm *tm_now = localtime(&now);
-      cur_month = tm_now->tm_mon + 1;
-      cur_year  = tm_now->tm_year + 1900;
-   }
+   int p, s, scnt;
+   highscore_entry_t *slist;
 
    if (filter)
    {
@@ -691,21 +694,19 @@ static void hs_top15(highscore_entry_t **out, char (*names_out)[4],
 
       if (player)
       {
-         memset(used, 0, sizeof(used));
+         slist = player_list(player, time_filter, &scnt);
+         memset(used, 0, sizeof(bool) * scnt);
          while (count < 15)
          {
             int best_score = -1, best_s = -1;
-            for (s = 0; s < player->score_count; s++)
+            for (s = 0; s < scnt; s++)
             {
                if (used[s]) continue;
-               if (time_filter == 1 &&
-                   (player->scores[s].month != cur_month ||
-                    player->scores[s].year  != cur_year)) continue;
-               if (player->scores[s].score > best_score)
-               { best_score = player->scores[s].score; best_s = s; }
+               if (slist[s].score > best_score)
+               { best_score = slist[s].score; best_s = s; }
             }
             if (best_s == -1) break;
-            out[count] = &player->scores[best_s];
+            out[count] = &slist[best_s];
             strncpy(names_out[count], player->name, 3);
             names_out[count][3] = '\0';
             count++;
@@ -723,17 +724,15 @@ static void hs_top15(highscore_entry_t **out, char (*names_out)[4],
 
       memset(used, 0, sizeof(used));
 
-      /* Find each player's best (respecting time filter) */
+      /* Find each player's best from the appropriate list */
       for (p = 0; p < pcnt; p++)
       {
          highscore_entry_t *pb = NULL;
-         for (s = 0; s < players[p].score_count; s++)
+         slist = player_list(&players[p], time_filter, &scnt);
+         for (s = 0; s < scnt; s++)
          {
-            highscore_entry_t *e = &players[p].scores[s];
-            if (time_filter == 1 &&
-                (e->month != cur_month || e->year != cur_year)) continue;
-            if (!pb || e->score > pb->score)
-               pb = e;
+            if (!pb || slist[s].score > pb->score)
+               pb = &slist[s];
          }
          if (pb)
          {
