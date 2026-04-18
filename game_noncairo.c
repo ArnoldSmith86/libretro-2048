@@ -720,48 +720,41 @@ static void hs_top15(highscore_entry_t **out, char (*names_out)[4],
    }
    else
    {
-      /* Global view: best score per player, sorted by score */
-      highscore_entry_t *best[MAX_PLAYERS];
-      char               best_names[MAX_PLAYERS][4];
-      bool used[MAX_PLAYERS];
-      int best_cnt = 0;
+      /* Global view: top 15 individual games from all players combined */
+      highscore_entry_t *all_e[MAX_PLAYERS * MAX_SCORES_PER_PLAYER];
+      char               all_names[MAX_PLAYERS * MAX_SCORES_PER_PLAYER][4];
+      bool               used_e[MAX_PLAYERS * MAX_SCORES_PER_PLAYER];
+      int                all_cnt = 0;
 
-      memset(used, 0, sizeof(used));
-
-      /* Find each player's best from the appropriate list */
+      /* Collect every game from every player */
       for (p = 0; p < pcnt; p++)
       {
-         highscore_entry_t *pb = NULL;
          slist = player_list(&players[p], time_filter, &scnt);
          for (s = 0; s < scnt; s++)
          {
-            if (!pb || slist[s].score > pb->score)
-               pb = &slist[s];
-         }
-         if (pb)
-         {
-            best[best_cnt] = pb;
-            strncpy(best_names[best_cnt], players[p].name, 3);
-            best_names[best_cnt][3] = '\0';
-            best_cnt++;
+            all_e[all_cnt] = &slist[s];
+            strncpy(all_names[all_cnt], players[p].name, 3);
+            all_names[all_cnt][3] = '\0';
+            all_cnt++;
          }
       }
+      memset(used_e, 0, sizeof(bool) * all_cnt);
 
       /* Pick top 15 by score */
       while (count < 15)
       {
          int top_score = -1, top_i = -1;
-         for (p = 0; p < best_cnt; p++)
+         for (p = 0; p < all_cnt; p++)
          {
-            if (used[p]) continue;
-            if (best[p]->score > top_score)
-            { top_score = best[p]->score; top_i = p; }
+            if (used_e[p]) continue;
+            if (all_e[p]->score > top_score)
+            { top_score = all_e[p]->score; top_i = p; }
          }
          if (top_i == -1) break;
-         out[count] = best[top_i];
-         strncpy(names_out[count], best_names[top_i], 4);
+         out[count] = all_e[top_i];
+         strncpy(names_out[count], all_names[top_i], 4);
          count++;
-         used[top_i] = true;
+         used_e[top_i] = true;
       }
    }
 
