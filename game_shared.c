@@ -732,12 +732,12 @@ void handle_input(key_state_t *ks)
          /* left/right navigates player pages */
          if (ks->left && !game.old_ks.left)
          {
-            int num_pages = count_hs_players() + 1;
+            int num_pages = count_hs_players() + 2;
             game.hs_page  = (game.hs_page + num_pages - 1) % num_pages;
          }
          else if (ks->right && !game.old_ks.right)
          {
-            int num_pages = count_hs_players() + 1;
+            int num_pages = count_hs_players() + 2;
             game.hs_page  = (game.hs_page + 1) % num_pages;
          }
       }
