@@ -766,7 +766,7 @@ void render_name_entry(void)
       static const char *hints[4] = {
          "UP/DOWN: Change Letter",
          "LEFT/RIGHT: Move Cursor",
-         "SELECT: Cycle Names",
+         "SELECT: Cycle Known Names",
          "START: Confirm",
       };
       int slot_h = (FONT_SIZE * 2 * 3) / 4;  /* inner height divided by 4 lines */
