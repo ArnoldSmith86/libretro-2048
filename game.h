@@ -14,7 +14,7 @@
 #define GRID_HEIGHT  4
 #define GRID_SIZE    (GRID_WIDTH * GRID_HEIGHT)
 
-#define MAX_PLAYERS           20
+#define MAX_PLAYERS           512
 #define MAX_SCORES_PER_PLAYER 10
 
 #define BOARD_WIDTH  (SPACING + TILE_SIZE * GRID_WIDTH  + SPACING * (GRID_WIDTH  - 1) + SPACING)
