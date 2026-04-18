@@ -134,6 +134,35 @@ void init_game(void)
    game.state = STATE_TITLE;
 }
 
+/* Called after SRAM is loaded to clamp any fields that could be corrupt
+ * due to a save from an older struct layout. */
+void game_validate(void)
+{
+   int i;
+
+   /* State must be one of the known values; anything else → title */
+   if (game.state < STATE_TITLE || game.state > STATE_HIGHSCORES)
+      game.state = STATE_TITLE;
+   /* Don't restore highscores screen across sessions */
+   if (game.state == STATE_HIGHSCORES)
+      game.state = STATE_TITLE;
+
+   /* Clamp player count */
+   if (game.player_count < 0 || game.player_count > MAX_PLAYERS)
+      game.player_count = 0;
+
+   /* Clamp per-player score counts */
+   for (i = 0; i < game.player_count; i++)
+   {
+      if (game.players[i].score_count < 0 ||
+          game.players[i].score_count > MAX_SCORES_PER_PLAYER)
+         game.players[i].score_count = 0;
+      if (game.players[i].month_score_count < 0 ||
+          game.players[i].month_score_count > MAX_SCORES_PER_PLAYER)
+         game.players[i].month_score_count = 0;
+   }
+}
+
 void start_game(void)
 {
    int row, col;
