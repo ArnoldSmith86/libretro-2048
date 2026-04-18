@@ -630,7 +630,7 @@ void change_state(game_state_t state)
          break;
 
       case STATE_NAME_ENTRY:
-         assert(state == STATE_GAME_OVER);
+         assert(state == STATE_TITLE);
          end_game();
          break;
 
@@ -696,7 +696,7 @@ void handle_input(key_state_t *ks)
       if (ks->start && !game.old_ks.start)
       {
          add_highscore(game.name_entry, game.score);
-         change_state(STATE_GAME_OVER);
+         change_state(STATE_TITLE);
       }
       if (!ks->select && game.old_ks.select)
       {
