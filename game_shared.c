@@ -192,7 +192,6 @@ void start_game(void)
       }
    }
 
-   game.won_before = false;
    game.suspended  = false;
 
    /* reset +score animation */
@@ -344,7 +343,16 @@ static bool move_tiles(void)
             moved = true;
 
             if (next->value == 11)
-               change_state(STATE_WON);
+            {
+               /* Only trigger win if no other tile already has >= 2048 */
+               int gi;
+               bool already_won = false;
+               for (gi = 0; gi < GRID_SIZE; gi++)
+                  if (&game.grid[gi] != next && game.grid[gi].value >= 11)
+                  { already_won = true; break; }
+               if (!already_won)
+                  change_state(STATE_WON);
+            }
          }
          else if (farthest != cell)
          {
