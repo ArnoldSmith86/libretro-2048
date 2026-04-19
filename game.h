@@ -95,7 +95,6 @@ typedef struct cell {
 typedef struct game {
    int score;
    int best_score;
-   bool won_before;
    game_state_t state;
    key_state_t old_ks;
    direction_t direction;
